@@ -1,6 +1,6 @@
 const Comment = require("../models/Comment");
 const Blog = require("../models/Blog");
-
+const Notification = require("../models/Notification");
 // Get all comments for a particular blog
 const getBlogComments = async (req, res) => {
   try {
@@ -65,6 +65,29 @@ const createComment = async (req, res) => {
     });
 
     await comment.populate("author", "name profileImage");
+
+    const blogAuthorId = blog.author.toString();
+    const commenterId = req.userId.toString();
+
+    if (blogAuthorId !== commenterId) {
+      const notification = await Notification.create({
+        recipient: blog.author,
+        sender: req.userId,
+        type: "comment",
+        blog: blogId,
+        message: `${comment.author.name} commented on your blog "${blog.title}".`,
+      });
+
+      await notification.populate("sender", "name profileImage");
+      await notification.populate("blog", "title");
+
+      const io = req.app.get("io");
+
+      if (io) {
+        io.to(`user-${blogAuthorId}`).emit("new-notification", notification);
+      }
+    }
+
     const io = req.app.get("io");
 
     if (io) {

@@ -6,7 +6,14 @@ import { useAuth } from "../context/AuthContext";
 import { MessageCircle, Send } from "lucide-react";
 import { motion } from "framer-motion";
 import socket from "../services/socket";
-import { ArrowLeft, CalendarDays, UserRound, LoaderCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  UserRound,
+  LoaderCircle,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import api from "../services/api";
 
 const BACKEND_URL = "http://localhost:8000";
@@ -23,6 +30,10 @@ function BlogDetails() {
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
   const [isLiking, setIsLiking] = useState(false);
+
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState("");
   const [commentsLoading, setCommentsLoading] = useState(true);
@@ -174,6 +185,34 @@ function BlogDetails() {
       setCommentSubmitting(false);
     }
   };
+
+  const handleDeleteBlog = async () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this blog? This action cannot be undone.",
+    );
+
+    if (!confirmed || isDeleting) return;
+
+    try {
+      setIsDeleting(true);
+      setDeleteError("");
+
+      await api.delete(`/blogs/${id}`);
+
+      navigate("/explore", {
+        replace: true,
+        state: { message: "Blog deleted successfully." },
+      });
+    } catch (error) {
+      setDeleteError(
+        error.response?.data?.message ||
+          "Unable to delete this blog. Please try again.",
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[70vh] items-center justify-center">
@@ -203,6 +242,14 @@ function BlogDetails() {
 
   const authorName = blog.author?.name || "Anonymous";
   const authorImage = blog.author?.profileImage;
+
+  const currentUserId = user?._id || user?.id;
+  const blogAuthorId = blog.author?._id || blog.author;
+
+  const isOwner =
+    !!currentUserId &&
+    !!blogAuthorId &&
+    currentUserId.toString() === blogAuthorId.toString();
 
   return (
     <motion.main
@@ -266,6 +313,41 @@ function BlogDetails() {
             </div>
           </div>
         </header>
+
+        {isOwner && (
+          <div className="mb-6 flex flex-wrap items-center gap-3">
+            <Link
+              to={`/blogs/${id}/edit`}
+              className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
+            >
+              <Pencil size={16} />
+              Edit Blog
+            </Link>
+
+            <button
+              type="button"
+              onClick={handleDeleteBlog}
+              disabled={isDeleting}
+              className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isDeleting ? (
+                <LoaderCircle size={16} className="animate-spin" />
+              ) : (
+                <Trash2 size={16} />
+              )}
+              {isDeleting ? "Deleting..." : "Delete Blog"}
+            </button>
+          </div>
+        )}
+
+        {deleteError && (
+          <p
+            role="alert"
+            className="mb-6 rounded-xl bg-red-50 p-3 text-sm text-red-600"
+          >
+            {deleteError}
+          </p>
+        )}
 
         <motion.button
           type="button"

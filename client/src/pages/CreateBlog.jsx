@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useRef, useState, useEffect } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -17,6 +17,9 @@ const MAX_TITLE_LENGTH = 150;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 const CreateBlog = () => {
+  const { id } = useParams();
+  const isEditMode = Boolean(id);
+
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
@@ -28,6 +31,64 @@ const CreateBlog = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  const [existingImage, setExistingImage] = useState("");
+
+  useEffect(() => {
+    if (!isEditMode) return;
+
+    let cancelled = false;
+
+    const fetchBlog = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await api.get(`/blogs/${id}`);
+        const fetchedBlog = response.data.blog;
+
+        const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+        const currentUserId = currentUser?._id || currentUser?.id;
+        const authorId = fetchedBlog.author?._id || fetchedBlog.author;
+
+        if (
+          !currentUserId ||
+          currentUserId.toString() !== authorId.toString()
+        ) {
+          navigate(`/blogs/${id}`, { replace: true });
+          return;
+        }
+
+        if (cancelled) return;
+
+        setTitle(fetchedBlog.title || "");
+        setContent(fetchedBlog.content || "");
+        setExistingImage(fetchedBlog.coverImage || "");
+        setImagePreview(
+          fetchedBlog.coverImage
+            ? fetchedBlog.coverImage.startsWith("http")
+              ? fetchedBlog.coverImage
+              : `http://localhost:8000${fetchedBlog.coverImage}`
+            : "",
+        );
+      } catch (error) {
+        if (!cancelled) {
+          setError(
+            error.response?.data?.message ||
+              "Unable to load this blog for editing.",
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchBlog();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isEditMode, navigate]);
 
   const handleImageChange = (event) => {
     const file = event.target.files?.[0];
@@ -55,12 +116,13 @@ const CreateBlog = () => {
   };
 
   const removeImage = () => {
-    if (imagePreview) {
+    if (imagePreview.startsWith("blob:")) {
       URL.revokeObjectURL(imagePreview);
     }
 
     setCoverImage(null);
     setImagePreview("");
+    setExistingImage("");
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -93,13 +155,20 @@ const CreateBlog = () => {
     try {
       setLoading(true);
 
-      await api.post("/blogs", formData);
+      if (isEditMode && !existingImage && !coverImage) {
+        formData.append("removeCoverImage", "true");
+      }
+
+      if (isEditMode) {
+        await api.put(`/blogs/${id}`, formData);
+      } else {
+        await api.post("/blogs", formData);
+      }
 
       setSuccess(true);
 
-      // Navigate after briefly displaying the success state.
       setTimeout(() => {
-        navigate("/");
+        navigate(isEditMode ? `/blogs/${id}` : "/");
       }, 900);
     } catch (error) {
       setError(
@@ -140,7 +209,7 @@ const CreateBlog = () => {
     <main className="min-h-screen bg-neutral-50 px-4 py-10 sm:px-6 lg:py-14">
       <div className="mx-auto max-w-4xl">
         <Link
-          to="/"
+          to={isEditMode ? `/blogs/${id}` : "/"}
           className="inline-flex items-center gap-2 text-sm text-neutral-500 transition hover:text-black"
         >
           <ArrowLeft size={16} />
@@ -158,12 +227,14 @@ const CreateBlog = () => {
           </p>
 
           <h1 className="mt-2 text-4xl font-bold tracking-tight text-neutral-950 sm:text-5xl">
-            Create a story<span className="text-neutral-400">.</span>
+            {isEditMode ? "Edit your story" : "Create a story"}
+            <span className="text-neutral-400">.</span>
           </h1>
 
           <p className="mt-4 max-w-xl leading-7 text-neutral-500">
-            Put your thoughts into words, add a cover image, and share your
-            perspective with the BlogSphere community.
+            {isEditMode
+              ? "Make changes to your story and keep it up to date."
+              : "Put your thoughts into words, add a cover image, and share your perspective with the BlogSphere community."}
           </p>
         </motion.div>
 
@@ -328,7 +399,9 @@ const CreateBlog = () => {
                 className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"
               >
                 <CheckCircle2 size={18} />
-                Blog published successfully! Taking you home...
+                {isEditMode
+                  ? "Blog updated successfully! Returning to your story..."
+                  : "Blog published successfully! Taking you home..."}
               </motion.div>
             )}
           </AnimatePresence>
@@ -337,7 +410,9 @@ const CreateBlog = () => {
           <div className="flex flex-col-reverse gap-3 border-t border-neutral-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
             <p className="flex items-center gap-2 text-xs text-neutral-400">
               <FileText size={15} />
-              Your story will be shared with the community.
+              {isEditMode
+                ? "Your changes will be saved to this story."
+                : "Your story will be shared with the community."}
             </p>
 
             <button
@@ -348,7 +423,7 @@ const CreateBlog = () => {
               {loading ? (
                 <>
                   <LoaderCircle size={18} className="animate-spin" />
-                  Publishing...
+                  {isEditMode ? "Saving..." : "Publishing..."}
                 </>
               ) : success ? (
                 <>
@@ -358,7 +433,7 @@ const CreateBlog = () => {
               ) : (
                 <>
                   <Send size={17} />
-                  Publish story
+                  {isEditMode ? "Save changes" : "Publish story"}
                 </>
               )}
             </button>
