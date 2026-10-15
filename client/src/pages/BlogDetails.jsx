@@ -13,6 +13,8 @@ import {
   LoaderCircle,
   Pencil,
   Trash2,
+  Check,
+  X,
 } from "lucide-react";
 import api from "../services/api";
 
@@ -33,12 +35,21 @@ function BlogDetails() {
 
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false); // New state
 
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState("");
   const [commentsLoading, setCommentsLoading] = useState(true);
   const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [commentError, setCommentError] = useState("");
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingCommentText, setEditingCommentText] = useState("");
+  const [commentActionLoading, setCommentActionLoading] = useState(null);
+  const [commentActionError, setCommentActionError] = useState("");
+  const [deletingCommentId, setDeletingCommentId] = useState(null);
+  const [isCommentDeleteModalOpen, setIsCommentDeleteModalOpen] =
+    useState(false);
+  const [commentToDelete, setCommentToDelete] = useState(null);
   useEffect(() => {
     const fetchBlog = async () => {
       try {
@@ -109,9 +120,23 @@ function BlogDetails() {
         return [...previousComments, newComment];
       });
     };
+    const handleCommentUpdated = (updatedComment) => {
+      setComments((previousComments) =>
+        previousComments.map((comment) =>
+          comment._id === updatedComment._id ? updatedComment : comment,
+        ),
+      );
+    };
 
+    const handleCommentDeleted = ({ _id }) => {
+      setComments((previousComments) =>
+        previousComments.filter((comment) => comment._id !== _id),
+      );
+    };
     // Register the listener before joining the room.
     socket.on("new-comment", handleNewComment);
+    socket.on("comment-updated", handleCommentUpdated);
+    socket.on("comment-deleted", handleCommentDeleted);
 
     if (!socket.connected) {
       socket.connect();
@@ -122,6 +147,8 @@ function BlogDetails() {
     return () => {
       socket.off("new-comment", handleNewComment);
       socket.emit("leave-blog", id);
+      socket.off("comment-updated", handleCommentUpdated);
+      socket.off("comment-deleted", handleCommentDeleted);
     };
   }, [id]);
 
@@ -186,12 +213,101 @@ function BlogDetails() {
     }
   };
 
-  const handleDeleteBlog = async () => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this blog? This action cannot be undone.",
-    );
+  const handleStartEditComment = (comment) => {
+    setEditingCommentId(comment._id);
+    setEditingCommentText(comment.content);
+    setCommentActionError("");
+  };
 
-    if (!confirmed || isDeleting) return;
+  const handleCancelEditComment = () => {
+    setEditingCommentId(null);
+    setEditingCommentText("");
+    setCommentActionError("");
+  };
+
+  const handleUpdateComment = async (commentId) => {
+    const content = editingCommentText.trim();
+
+    if (!content) {
+      setCommentActionError("Comment cannot be empty.");
+      return;
+    }
+
+    if (content.length > 1000) {
+      setCommentActionError("Comment cannot exceed 1000 characters.");
+      return;
+    }
+
+    try {
+      setCommentActionLoading(commentId);
+      setCommentActionError("");
+
+      const response = await api.put(`/comments/comment/${commentId}`, {
+        content,
+      });
+
+      setComments((previousComments) =>
+        previousComments.map((comment) =>
+          comment._id === commentId ? response.data.comment : comment,
+        ),
+      );
+
+      setEditingCommentId(null);
+      setEditingCommentText("");
+    } catch (error) {
+      setCommentActionError(
+        error.response?.data?.message ||
+          "Unable to update this comment. Please try again.",
+      );
+    } finally {
+      setCommentActionLoading(null);
+    }
+  };
+
+  // This opens the modal and sets which comment to delete
+  const handleDeleteCommentClick = (commentId) => {
+    setCommentToDelete(commentId);
+    setIsCommentDeleteModalOpen(true);
+  };
+
+  // This executes the actual API call when "Delete" is clicked in the modal
+  const executeDeleteComment = async () => {
+    if (!commentToDelete) return;
+
+    try {
+      setDeletingCommentId(commentToDelete);
+      setCommentActionError("");
+
+      await api.delete(`/comments/comment/${commentToDelete}`);
+
+      setComments((previousComments) =>
+        previousComments.filter((comment) => comment._id !== commentToDelete),
+      );
+
+      if (editingCommentId === commentToDelete) {
+        setEditingCommentId(null);
+        setEditingCommentText("");
+      }
+    } catch (error) {
+      setCommentActionError(
+        error.response?.data?.message ||
+          "Unable to delete this comment. Please try again.",
+      );
+    } finally {
+      setDeletingCommentId(null);
+      setIsCommentDeleteModalOpen(false);
+      setCommentToDelete(null);
+    }
+  };
+
+  // This just opens the modal
+  const handleDeleteClick = () => {
+    setIsDeleteModalOpen(true);
+  };
+
+  // This runs when they click "Delete" inside the custom modal
+  const executeDelete = async () => {
+    if (isDeleting) return;
 
     try {
       setIsDeleting(true);
@@ -199,6 +315,7 @@ function BlogDetails() {
 
       await api.delete(`/blogs/${id}`);
 
+      setIsDeleteModalOpen(false);
       navigate("/explore", {
         replace: true,
         state: { message: "Blog deleted successfully." },
@@ -208,6 +325,7 @@ function BlogDetails() {
         error.response?.data?.message ||
           "Unable to delete this blog. Please try again.",
       );
+      setIsDeleteModalOpen(false); // Close modal so they can see the error
     } finally {
       setIsDeleting(false);
     }
@@ -326,7 +444,7 @@ function BlogDetails() {
 
             <button
               type="button"
-              onClick={handleDeleteBlog}
+              onClick={handleDeleteClick}
               disabled={isDeleting}
               className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -472,6 +590,14 @@ function BlogDetails() {
               {commentError}
             </div>
           )}
+          {commentActionError && (
+            <div
+              role="alert"
+              className="mb-5 rounded-xl bg-red-50 p-3 text-sm text-red-600"
+            >
+              {commentActionError}
+            </div>
+          )}
 
           {/* Existing Comments */}
           {commentsLoading ? (
@@ -523,25 +649,138 @@ function BlogDetails() {
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <p className="font-semibold text-neutral-900">
-                        {comment.author?.name || "Anonymous"}
-                      </p>
+                    {(() => {
+                      const commentAuthorId =
+                        comment.author?._id || comment.author;
+                      const isCommentOwner =
+                        !!currentUserId &&
+                        !!commentAuthorId &&
+                        currentUserId.toString() === commentAuthorId.toString();
+                      const isEditing = editingCommentId === comment._id;
+                      const isUpdating = commentActionLoading === comment._id;
+                      const isDeletingThisComment =
+                        deletingCommentId === comment._id;
 
-                      <time
-                        dateTime={comment.createdAt}
-                        className="text-xs text-neutral-400"
-                      >
-                        {new Date(comment.createdAt).toLocaleString("en-IN", {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })}
-                      </time>
-                    </div>
+                      return (
+                        <>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <p className="font-semibold text-neutral-900">
+                              {comment.author?.name || "Anonymous"}
+                            </p>
 
-                    <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-7 text-neutral-600">
-                      {comment.content}
-                    </p>
+                            <time
+                              dateTime={comment.createdAt}
+                              className="text-xs text-neutral-400"
+                            >
+                              {new Date(comment.createdAt).toLocaleString(
+                                "en-IN",
+                                {
+                                  dateStyle: "medium",
+                                  timeStyle: "short",
+                                },
+                              )}
+                            </time>
+                          </div>
+
+                          {isEditing ? (
+                            <div className="mt-3 space-y-3">
+                              <textarea
+                                value={editingCommentText}
+                                onChange={(event) =>
+                                  setEditingCommentText(event.target.value)
+                                }
+                                maxLength={1000}
+                                rows={3}
+                                aria-label="Edit comment"
+                                className="w-full resize-y rounded-xl border border-violet-200 bg-neutral-50 p-3 text-sm leading-6 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                              />
+
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-xs text-neutral-400">
+                                  {editingCommentText.length}/1000
+                                </span>
+
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={handleCancelEditComment}
+                                    disabled={isUpdating}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+                                  >
+                                    <X size={15} />
+                                    Cancel
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdateComment(comment._id)
+                                    }
+                                    disabled={
+                                      !editingCommentText.trim() || isUpdating
+                                    }
+                                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {isUpdating ? (
+                                      <LoaderCircle
+                                        size={15}
+                                        className="animate-spin"
+                                      />
+                                    ) : (
+                                      <Check size={15} />
+                                    )}
+                                    {isUpdating ? "Saving..." : "Save"}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-7 text-neutral-600">
+                              {comment.content}
+                            </p>
+                          )}
+
+                          {isCommentOwner && !isEditing && (
+                            <div className="mt-3 flex flex-wrap gap-3">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditComment(comment)}
+                                disabled={
+                                  !!commentActionLoading || !!deletingCommentId
+                                }
+                                className="inline-flex items-center gap-1.5 text-sm font-medium text-violet-600 hover:text-violet-800 disabled:opacity-50"
+                              >
+                                <Pencil size={14} />
+                                Edit
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleDeleteCommentClick(comment._id)
+                                }
+                                disabled={
+                                  !!commentActionLoading || !!deletingCommentId
+                                }
+                                className="inline-flex items-center gap-1.5 text-sm font-medium text-red-500 hover:text-red-700 disabled:opacity-50"
+                              >
+                                {isDeletingThisComment ? (
+                                  <LoaderCircle
+                                    size={14}
+                                    className="animate-spin"
+                                  />
+                                ) : (
+                                  <Trash2 size={14} />
+                                )}
+                                {isDeletingThisComment
+                                  ? "Deleting..."
+                                  : "Delete"}
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </motion.div>
               ))}
@@ -559,6 +798,111 @@ function BlogDetails() {
             Explore more stories
           </Link>
         </div>
+        {/* Modern Delete Modal Overlay */}
+        {isDeleteModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md overflow-hidden rounded-2xl bg-white p-6 shadow-2xl"
+            >
+              <div className="mb-6 flex items-center gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
+                  <Trash2 size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-neutral-900">
+                    Delete Blog
+                  </h3>
+                  <p className="mt-1 text-sm text-neutral-500">
+                    Are you sure? This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  disabled={isDeleting}
+                  className="rounded-xl border border-neutral-200 bg-white px-5 py-2.5 font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={executeDelete}
+                  disabled={isDeleting}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isDeleting ? (
+                    <>
+                      <LoaderCircle size={16} className="animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    "Yes, Delete"
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+        {/* Modern Comment Delete Modal Overlay */}
+        {isCommentDeleteModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md overflow-hidden rounded-2xl bg-white p-6 shadow-2xl"
+            >
+              <div className="mb-6 flex items-center gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
+                  <Trash2 size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-neutral-900">
+                    Delete Comment
+                  </h3>
+                  <p className="mt-1 text-sm text-neutral-500">
+                    Are you sure? This comment will be permanently removed.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCommentDeleteModalOpen(false);
+                    setCommentToDelete(null);
+                  }}
+                  disabled={!!deletingCommentId}
+                  className="rounded-xl border border-neutral-200 bg-white px-5 py-2.5 font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={executeDeleteComment}
+                  disabled={!!deletingCommentId}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {!!deletingCommentId ? (
+                    <>
+                      <LoaderCircle size={16} className="animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    "Yes, Delete"
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </article>
     </motion.main>
   );
