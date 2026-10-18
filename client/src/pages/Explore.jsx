@@ -275,7 +275,11 @@ const Explore = () => {
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-900 text-sm font-medium text-white">
                         {blog.author?.profileImage ? (
                           <img
-                            src={blog.author.profileImage}
+                            src={
+                              blog.author.profileImage.startsWith("http")
+                                ? blog.author.profileImage
+                                : `http://localhost:8000${blog.author.profileImage}`
+                            }
                             alt={blog.author.name || "Author"}
                             className="h-full w-full object-cover"
                           />

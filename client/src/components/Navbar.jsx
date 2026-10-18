@@ -52,9 +52,9 @@ const Navbar = () => {
               Write
             </NavLink>
           )}
-          {isAuthenticated && (<NotificationBell/>)}
+          {isAuthenticated && <NotificationBell />}
         </div>
-        
+
         {/* Desktop Auth */}
         <div className="hidden items-center gap-3 md:flex">
           {isAuthenticated ? (
@@ -66,7 +66,11 @@ const Navbar = () => {
                 <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-neutral-900 text-white">
                   {user?.profileImage ? (
                     <img
-                      src={user.profileImage}
+                      src={
+                        user.profileImage.startsWith("http")
+                          ? user.profileImage
+                          : `http://localhost:8000${user.profileImage}`
+                      }
                       alt={user.name}
                       className="h-full w-full object-cover"
                     />
@@ -107,16 +111,15 @@ const Navbar = () => {
 
         {/* Mobile Menu Button */}
         <div className="flex items-center gap-2 md:hidden">
-        
-        <button
-          onClick={() => setIsMenuOpen((prev) => !prev)}
-          className="rounded-lg p-2 transition hover:bg-neutral-100 md:hidden"
-          aria-label="Toggle menu"
-          aria-expanded={isMenuOpen}
-        >
-          {isMenuOpen ? <X size={22} /> : <Menu size={22} />}
-        </button>
-        {isAuthenticated && <NotificationBell/>}
+          <button
+            onClick={() => setIsMenuOpen((prev) => !prev)}
+            className="rounded-lg p-2 transition hover:bg-neutral-100 md:hidden"
+            aria-label="Toggle menu"
+            aria-expanded={isMenuOpen}
+          >
+            {isMenuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+          {isAuthenticated && <NotificationBell />}
         </div>
       </nav>
 
@@ -152,7 +155,7 @@ const Navbar = () => {
                   >
                     Write
                   </NavLink>
-                  
+
                   <NavLink
                     to="/profile"
                     onClick={closeMenu}
@@ -160,7 +163,7 @@ const Navbar = () => {
                   >
                     Profile
                   </NavLink>
-                  
+
                   <button
                     onClick={handleLogout}
                     className="mt-2 flex items-center gap-2 border-t border-neutral-200 pt-4 text-left text-red-500"

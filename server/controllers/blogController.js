@@ -1,5 +1,19 @@
+const fs = require("fs");
+const path = require("path");
 const Blog = require("../models/Blog");
+const Comment = require("../models/Comment");
 const Notification = require("../models/Notification");
+
+const deleteLocalFile = (fileUrl) => {
+  if (!fileUrl || !fileUrl.startsWith("/uploads/")) return;
+  const filePath = path.join(__dirname, "..", fileUrl);
+  fs.unlink(filePath, (err) => {
+    if (err && err.code !== "ENOENT") {
+      console.error("Failed to delete old cover image:", err.message);
+    }
+  });
+};
+
 const getAllBlogs = async (req, res) => {
   try {
     const blogs = await Blog.find()
@@ -194,10 +208,10 @@ const updateBlog = async (req, res) => {
     // Keep the existing image unless a new one is uploaded.
 
     if (req.file) {
-      // A new image was uploaded
+      if (blog.coverImage) deleteLocalFile(blog.coverImage);
       blog.coverImage = `/uploads/${req.file.filename}`;
     } else if (req.body.removeCoverImage === "true") {
-      // The user chose to remove the existing image
+      if (blog.coverImage) deleteLocalFile(blog.coverImage);
       blog.coverImage = "";
     }
 
@@ -239,7 +253,11 @@ const deleteBlog = async (req, res) => {
         message: "You are not authorized to delete this blog",
       });
     }
-
+    if (blog.coverImage) {
+      deleteLocalFile(blog.coverImage);
+    }
+    await Comment.deleteMany({ blog: blog._id });
+    await Notification.deleteMany({ blog: blog._id });
     await blog.deleteOne();
 
     return res.status(200).json({
