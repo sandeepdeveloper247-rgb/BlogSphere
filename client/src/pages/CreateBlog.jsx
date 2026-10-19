@@ -9,12 +9,27 @@ import {
   FileText,
   LoaderCircle,
   CheckCircle2,
+  Tag,
+  Plus,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 
 const MAX_TITLE_LENGTH = 150;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const MAX_TAGS = 5;
+const MAX_TAG_LENGTH = 25;
+
+const SUGGESTED_TAGS = [
+  "React",
+  "System Design",
+  "JavaScript",
+  "Career",
+  "Web Dev",
+  "AI",
+  "DSA",
+  "Backend",
+];
 
 const CreateBlog = () => {
   const { id } = useParams();
@@ -26,6 +41,8 @@ const CreateBlog = () => {
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [tags, setTags] = useState([]);
+  const [tagInput, setTagInput] = useState("");
   const [coverImage, setCoverImage] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
   const [error, setError] = useState("");
@@ -63,6 +80,7 @@ const CreateBlog = () => {
 
         setTitle(fetchedBlog.title || "");
         setContent(fetchedBlog.content || "");
+        setTags(Array.isArray(fetchedBlog.tags) ? fetchedBlog.tags : []);
         setExistingImage(fetchedBlog.coverImage || "");
         setImagePreview(
           fetchedBlog.coverImage
@@ -90,6 +108,47 @@ const CreateBlog = () => {
     };
   }, [id, isEditMode, navigate]);
 
+  const addTag = (rawValue) => {
+    const cleaned = rawValue.trim().replace(/^#/, "");
+    if (!cleaned) return;
+
+    if (tags.length >= MAX_TAGS) {
+      setError(`You can add up to ${MAX_TAGS} tags.`);
+      return;
+    }
+
+    if (cleaned.length > MAX_TAG_LENGTH) {
+      setError(`Each tag must be ${MAX_TAG_LENGTH} characters or fewer.`);
+      return;
+    }
+
+    const exists = tags.some(
+      (existing) => existing.toLowerCase() === cleaned.toLowerCase(),
+    );
+
+    if (exists) {
+      setTagInput("");
+      return;
+    }
+
+    setError("");
+    setTags((prev) => [...prev, cleaned]);
+    setTagInput("");
+  };
+
+  const handleTagKeyDown = (event) => {
+    if (event.key === "Enter" || event.key === ",") {
+      event.preventDefault();
+      addTag(tagInput);
+    } else if (event.key === "Backspace" && !tagInput && tags.length > 0) {
+      setTags((prev) => prev.slice(0, -1));
+    }
+  };
+
+  const removeTag = (tagToRemove) => {
+    setTags((prev) => prev.filter((tag) => tag !== tagToRemove));
+  };
+
   const handleImageChange = (event) => {
     const file = event.target.files?.[0];
 
@@ -111,7 +170,6 @@ const CreateBlog = () => {
 
     setError("");
     setCoverImage(file);
-
     setImagePreview(URL.createObjectURL(file));
   };
 
@@ -147,6 +205,7 @@ const CreateBlog = () => {
 
     formData.append("title", title.trim());
     formData.append("content", content.trim());
+    formData.append("tags", JSON.stringify(tags));
 
     if (coverImage) {
       formData.append("coverImage", coverImage);
@@ -276,6 +335,97 @@ const CreateBlog = () => {
               className="mt-3 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-4 text-lg font-medium outline-none transition placeholder:text-neutral-400 focus:border-neutral-500 focus:bg-white focus:ring-4 focus:ring-neutral-100"
               required
             />
+          </div>
+
+          {/* Topic Tags */}
+          <div>
+            <div className="flex items-center justify-between gap-3">
+              <label
+                htmlFor="blog-tags"
+                className="flex items-center gap-1.5 text-sm font-semibold text-neutral-800"
+              >
+                <Tag size={15} className="text-neutral-500" />
+                Topic tags{" "}
+                <span className="font-normal text-neutral-400">(optional)</span>
+              </label>
+
+              <span className="text-xs text-neutral-400">
+                {tags.length}/{MAX_TAGS} tags
+              </span>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 p-2.5 focus-within:border-neutral-500 focus-within:bg-white focus-within:ring-4 focus-within:ring-neutral-100">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white"
+                >
+                  #{tag}
+                  <button
+                    type="button"
+                    onClick={() => removeTag(tag)}
+                    aria-label={`Remove ${tag} tag`}
+                    className="rounded-full p-0.5 text-neutral-300 transition hover:bg-neutral-700 hover:text-white"
+                  >
+                    <X size={13} />
+                  </button>
+                </span>
+              ))}
+
+              {tags.length < MAX_TAGS && (
+                <div className="flex min-w-[180px] flex-1 items-center gap-2">
+                  <input
+                    id="blog-tags"
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={handleTagKeyDown}
+                    maxLength={MAX_TAG_LENGTH}
+                    placeholder={
+                      tags.length === 0
+                        ? "Add a tag (e.g., React, System Design) and press Enter..."
+                        : "Add another tag..."
+                    }
+                    className="w-full bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-neutral-400"
+                  />
+
+                  {tagInput.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => addTag(tagInput)}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-neutral-900 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-neutral-800"
+                    >
+                      <Plus size={13} />
+                      Add
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Quick-Select Suggested Tags */}
+            {tags.length < MAX_TAGS && (
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <span className="mr-1 text-xs text-neutral-400">
+                  Suggested:
+                </span>
+                {SUGGESTED_TAGS.filter(
+                  (suggested) =>
+                    !tags.some(
+                      (t) => t.toLowerCase() === suggested.toLowerCase(),
+                    ),
+                ).map((suggested) => (
+                  <button
+                    key={suggested}
+                    type="button"
+                    onClick={() => addTag(suggested)}
+                    className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-600 transition hover:border-neutral-400 hover:text-black"
+                  >
+                    + {suggested}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Cover Image */}

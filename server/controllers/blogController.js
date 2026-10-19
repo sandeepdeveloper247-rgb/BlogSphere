@@ -4,6 +4,29 @@ const Blog = require("../models/Blog");
 const Comment = require("../models/Comment");
 const Notification = require("../models/Notification");
 
+const parseTags = (rawTags) => {
+  if (!rawTags) return [];
+  let parsed = rawTags;
+
+  if (typeof rawTags === "string") {
+    try {
+      parsed = JSON.parse(rawTags);
+    } catch {
+      parsed = rawTags.split(",");
+    }
+  }
+
+  if (!Array.isArray(parsed)) return [];
+
+  return [
+    ...new Set(
+      parsed
+        .map((tag) => String(tag).trim())
+        .filter((tag) => tag.length > 0 && tag.length <= 25),
+    ),
+  ].slice(0, 5);
+};
+
 const deleteLocalFile = (fileUrl) => {
   if (!fileUrl || !fileUrl.startsWith("/uploads/")) return;
   const filePath = path.join(__dirname, "..", fileUrl);
@@ -49,6 +72,7 @@ const createBlog = async (req, res) => {
       });
     }
     const coverImage = req.file ? `/uploads/${req.file.filename}` : "";
+    const tags = parseTags(req.body.tags);
     const blog = await Blog.create({
       title: title.trim(),
       content: content.trim(),
@@ -204,7 +228,9 @@ const updateBlog = async (req, res) => {
 
     blog.title = title.trim();
     blog.content = content.trim();
-
+    if (req.body.tags !== undefined) {
+      blog.tags = parseTags(req.body.tags);
+    }
     // Keep the existing image unless a new one is uploaded.
 
     if (req.file) {

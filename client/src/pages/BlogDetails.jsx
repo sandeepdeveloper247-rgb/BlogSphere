@@ -392,6 +392,19 @@ function BlogDetails() {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="text-3xl font-extrabold leading-tight tracking-tight text-neutral-900 sm:text-4xl lg:text-5xl"
           >
+            {Array.isArray(blog.tags) && blog.tags.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {blog.tags.map((tag) => (
+                  <Link
+                    key={tag}
+                    to={`/explore?tag=${encodeURIComponent(tag)}`}
+                    className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700 transition hover:bg-violet-100"
+                  >
+                    #{tag}
+                  </Link>
+                ))}
+              </div>
+            )}
             {blog.title}
           </motion.h1>
 

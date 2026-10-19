@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Search,
@@ -7,15 +7,25 @@ import {
   SlidersHorizontal,
   ArrowUpDown,
   X,
+  Tag,
 } from "lucide-react";
 import api from "../services/api";
 
 const Explore = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTag = searchParams.get("tag") || "All";
+
   const [blogs, setBlogs] = useState([]);
   const [search, setSearch] = useState("");
+  const [selectedTag, setSelectedTag] = useState(initialTag);
   const [sortBy, setSortBy] = useState("newest");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const tagFromUrl = searchParams.get("tag") || "All";
+    setSelectedTag(tagFromUrl);
+  }, [searchParams]);
 
   useEffect(() => {
     let active = true;
@@ -47,6 +57,36 @@ const Explore = () => {
     };
   }, []);
 
+  // Dynamically collect all unique tags from published blogs
+  const allTags = useMemo(() => {
+    const tagMap = new Map();
+
+    blogs.forEach((blog) => {
+      if (Array.isArray(blog.tags)) {
+        blog.tags.forEach((tag) => {
+          const clean = tag.trim();
+          if (!clean) return;
+          const key = clean.toLowerCase();
+          if (!tagMap.has(key)) {
+            tagMap.set(key, clean);
+          }
+        });
+      }
+    });
+
+    return ["All", ...Array.from(tagMap.values())];
+  }, [blogs]);
+
+  const handleSelectTag = (tag) => {
+    setSelectedTag(tag);
+    if (tag === "All") {
+      searchParams.delete("tag");
+      setSearchParams(searchParams);
+    } else {
+      setSearchParams({ tag });
+    }
+  };
+
   const filteredBlogs = useMemo(() => {
     const query = search.trim().toLowerCase();
 
@@ -54,12 +94,20 @@ const Explore = () => {
       const title = blog.title || "";
       const content = blog.content || "";
       const author = blog.author?.name || "";
+      const blogTags = Array.isArray(blog.tags) ? blog.tags : [];
 
-      return (
+      const matchesSearch =
+        !query ||
         title.toLowerCase().includes(query) ||
         content.toLowerCase().includes(query) ||
-        author.toLowerCase().includes(query)
-      );
+        author.toLowerCase().includes(query) ||
+        blogTags.some((t) => t.toLowerCase().includes(query));
+
+      const matchesTag =
+        selectedTag === "All" ||
+        blogTags.some((t) => t.toLowerCase() === selectedTag.toLowerCase());
+
+      return matchesSearch && matchesTag;
     });
 
     return result.sort((a, b) => {
@@ -68,7 +116,7 @@ const Explore = () => {
 
       return sortBy === "oldest" ? dateA - dateB : dateB - dateA;
     });
-  }, [blogs, search, sortBy]);
+  }, [blogs, search, selectedTag, sortBy]);
 
   return (
     <main className="min-h-screen bg-neutral-50">
@@ -106,7 +154,7 @@ const Explore = () => {
                 type="search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search stories, content, or authors..."
+                placeholder="Search stories, content, tags, or authors..."
                 aria-label="Search blogs"
                 className="w-full rounded-2xl border border-neutral-200 bg-neutral-50 py-3.5 pl-11 pr-11 text-sm outline-none transition focus:border-neutral-400 focus:bg-white focus:ring-4 focus:ring-neutral-100"
               />
@@ -139,6 +187,36 @@ const Explore = () => {
               </select>
             </label>
           </div>
+
+          {/* Topic Category Pills */}
+          {allTags.length > 1 && (
+            <div className="mt-5 flex items-center gap-2 overflow-x-auto pb-1">
+              <span className="mr-1 inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-neutral-400">
+                <Tag size={14} />
+                Topics:
+              </span>
+
+              {allTags.map((tag) => {
+                const isActive =
+                  selectedTag.toLowerCase() === tag.toLowerCase();
+
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => handleSelectTag(tag)}
+                    className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+                      isActive
+                        ? "bg-black text-white shadow-sm"
+                        : "border border-neutral-200 bg-neutral-50 text-neutral-600 hover:border-neutral-300 hover:bg-neutral-100 hover:text-black"
+                    }`}
+                  >
+                    {tag === "All" ? "All Topics" : `#${tag}`}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 
@@ -147,7 +225,11 @@ const Explore = () => {
         <div className="mb-7 flex items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-semibold text-neutral-900">
-              {search ? "Search results" : "All stories"}
+              {selectedTag !== "All"
+                ? `Stories tagged #${selectedTag}`
+                : search
+                  ? "Search results"
+                  : "All stories"}
             </h2>
 
             {!loading && !error && (
@@ -197,7 +279,7 @@ const Explore = () => {
             className="rounded-3xl border border-dashed border-neutral-300 bg-white px-6 py-16 text-center"
           >
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-neutral-100">
-              {search ? (
+              {search || selectedTag !== "All" ? (
                 <Search size={23} className="text-neutral-500" />
               ) : (
                 <PenLine size={23} className="text-neutral-500" />
@@ -205,22 +287,27 @@ const Explore = () => {
             </div>
 
             <h3 className="mt-5 text-xl font-semibold text-neutral-900">
-              {search ? "No matching stories" : "No stories published yet"}
+              {search || selectedTag !== "All"
+                ? "No matching stories"
+                : "No stories published yet"}
             </h3>
 
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-neutral-500">
-              {search
-                ? "Try a different title, keyword, or author name."
+              {search || selectedTag !== "All"
+                ? "Try a different topic tag, title, keyword, or author name."
                 : "Be the first to share an idea with the BlogSphere community."}
             </p>
 
-            {search ? (
+            {search || selectedTag !== "All" ? (
               <button
                 type="button"
-                onClick={() => setSearch("")}
+                onClick={() => {
+                  setSearch("");
+                  handleSelectTag("All");
+                }}
                 className="mt-6 rounded-full border border-neutral-200 px-5 py-2.5 text-sm font-medium hover:bg-neutral-50"
               >
-                Clear search
+                Reset filters
               </button>
             ) : (
               <Link
@@ -250,7 +337,11 @@ const Explore = () => {
                   <div className="h-52 bg-neutral-100">
                     {blog.coverImage ? (
                       <img
-                        src={`http://localhost:8000${blog.coverImage}`}
+                        src={
+                          blog.coverImage.startsWith("http")
+                            ? blog.coverImage
+                            : `http://localhost:8000${blog.coverImage}`
+                        }
                         alt={blog.title || "Blog cover"}
                         loading="lazy"
                         className="h-full w-full object-cover"
@@ -263,6 +354,24 @@ const Explore = () => {
                   </div>
 
                   <div className="p-6">
+                    {/* Tags on Blog Card */}
+                    {Array.isArray(blog.tags) && blog.tags.length > 0 && (
+                      <div className="mb-3 flex flex-wrap gap-1.5">
+                        {blog.tags.slice(0, 3).map((tag) => (
+                          <span
+                            key={tag}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              handleSelectTag(tag);
+                            }}
+                            className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-700 transition hover:bg-black hover:text-white"
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
                     <h3 className="line-clamp-2 text-xl font-semibold text-neutral-900">
                       {blog.title}
                     </h3>
