@@ -4,7 +4,10 @@ import api from "../services/api";
 import { motion } from "framer-motion";
 import { ArrowRight, PenLine, Sparkles } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-
+const getReadTime = (content = "") => {
+  const words = content.trim().split(/\s+/).filter(Boolean).length;
+  return `${Math.max(1, Math.ceil(words / 200))} min read`;
+};
 const Home = () => {
   const { isAuthenticated } = useAuth();
 
@@ -264,7 +267,11 @@ const Home = () => {
                           </p>
 
                           <p className="text-xs text-neutral-400">
-                            {new Date(blog.createdAt).toLocaleDateString()}
+                            {blog.createdAt
+                              ? new Date(blog.createdAt).toLocaleDateString()
+                              : ""}
+                            {" · "}
+                            {getReadTime(blog.content)}
                           </p>
                         </div>
                       </div>

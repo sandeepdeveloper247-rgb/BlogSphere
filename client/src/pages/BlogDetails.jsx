@@ -15,23 +15,30 @@ import {
   Trash2,
   Check,
   X,
+  Bookmark,
+  Clock,
 } from "lucide-react";
 import api from "../services/api";
 
 const BACKEND_URL = "http://localhost:8000";
-
+const getReadTime = (content = "") => {
+  const words = content.trim().split(/\s+/).filter(Boolean).length;
+  return `${Math.max(1, Math.ceil(words / 200))} min read`;
+};
 function BlogDetails() {
   const { id } = useParams();
 
   const [blog, setBlog] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, login } = useAuth();
   const navigate = useNavigate();
 
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
   const [isLiking, setIsLiking] = useState(false);
+  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [isBookmarking, setIsBookmarking] = useState(false);
 
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -69,6 +76,13 @@ function BlogDetails() {
             fetchedBlog.likes?.some((like) => {
               const likedUserId = like._id || like;
               return likedUserId.toString() === currentUserId.toString();
+            }),
+        );
+        setIsBookmarked(
+          Array.isArray(user?.savedBlogs) &&
+            user.savedBlogs.some((saved) => {
+              const savedId = saved?._id || saved;
+              return savedId?.toString() === fetchedBlog._id.toString();
             }),
         );
       } catch (err) {
@@ -174,6 +188,34 @@ function BlogDetails() {
       );
     } finally {
       setIsLiking(false);
+    }
+  };
+  const handleBookmark = async () => {
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    if (isBookmarking) return;
+
+    try {
+      setIsBookmarking(true);
+
+      const response = await api.post(`/blogs/${id}/bookmark`);
+      setIsBookmarked(response.data.isBookmarked);
+
+      // Sync updated savedBlogs array with AuthContext & localStorage
+      const currentToken = localStorage.getItem("token");
+      if (user && currentToken) {
+        login({ ...user, savedBlogs: response.data.savedBlogs }, currentToken);
+      }
+    } catch (error) {
+      console.error(
+        "Failed to update bookmark:",
+        error.response?.data?.message || error.message,
+      );
+    } finally {
+      setIsBookmarking(false);
     }
   };
 
@@ -409,7 +451,10 @@ function BlogDetails() {
           </motion.h1>
 
           <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-4">
-            <div className="flex items-center gap-3">
+            <Link
+              to={`/author/${blogAuthorId}`}
+              className="group flex items-center gap-3"
+            >
               {authorImage ? (
                 <img
                   src={
@@ -418,7 +463,7 @@ function BlogDetails() {
                       : `${BACKEND_URL}${authorImage}`
                   }
                   alt={authorName}
-                  className="h-11 w-11 rounded-full object-cover"
+                  className="h-11 w-11 rounded-full object-cover ring-2 ring-transparent transition group-hover:ring-violet-300"
                 />
               ) : (
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-violet-100 text-violet-700">
@@ -427,10 +472,12 @@ function BlogDetails() {
               )}
 
               <div>
-                <p className="font-semibold text-neutral-900">{authorName}</p>
+                <p className="font-semibold text-neutral-900 transition group-hover:text-violet-600">
+                  {authorName}
+                </p>
                 <p className="text-sm text-neutral-500">Author</p>
               </div>
-            </div>
+            </Link>
 
             <div className="flex items-center gap-2 text-sm text-neutral-500">
               <CalendarDays size={17} />
@@ -441,6 +488,10 @@ function BlogDetails() {
                   year: "numeric",
                 })}
               </time>
+            </div>
+            <div className="flex items-center gap-1.5 text-sm text-neutral-500">
+              <Clock size={16} />
+              <span>{getReadTime(blog.content)}</span>
             </div>
           </div>
         </header>
@@ -480,30 +531,50 @@ function BlogDetails() {
           </p>
         )}
 
-        <motion.button
-          type="button"
-          onClick={handleLike}
-          disabled={isLiking}
-          whileTap={{ scale: 0.9 }}
-          className={`mb-6 inline-flex items-center gap-2 rounded-full border px-5 py-3 font-semibold transition ${
-            isLiked
-              ? "border-rose-200 bg-rose-50 text-rose-600"
-              : "border-neutral-200 bg-white text-neutral-700 hover:border-rose-200 hover:text-rose-600"
-          } disabled:cursor-not-allowed disabled:opacity-60`}
-          aria-label={isLiked ? "Unlike this blog" : "Like this blog"}
-        >
-          <motion.span
-            key={isLiked ? "liked" : "unliked"}
-            initial={{ scale: 0.7 }}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", stiffness: 400, damping: 12 }}
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+          <motion.button
+            type="button"
+            onClick={handleLike}
+            disabled={isLiking}
+            whileTap={{ scale: 0.9 }}
+            className={`inline-flex items-center gap-2 rounded-full border px-5 py-3 font-semibold transition ${
+              isLiked
+                ? "border-rose-200 bg-rose-50 text-rose-600"
+                : "border-neutral-200 bg-white text-neutral-700 hover:border-rose-200 hover:text-rose-600"
+            } disabled:cursor-not-allowed disabled:opacity-60`}
+            aria-label={isLiked ? "Unlike this blog" : "Like this blog"}
           >
-            <Heart size={20} fill={isLiked ? "currentColor" : "none"} />
-          </motion.span>
+            <motion.span
+              key={isLiked ? "liked" : "unliked"}
+              initial={{ scale: 0.7 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", stiffness: 400, damping: 12 }}
+            >
+              <Heart size={20} fill={isLiked ? "currentColor" : "none"} />
+            </motion.span>
 
-          <span>{likesCount}</span>
-          <span>{likesCount === 1 ? "Like" : "Likes"}</span>
-        </motion.button>
+            <span>{likesCount}</span>
+            <span>{likesCount === 1 ? "Like" : "Likes"}</span>
+          </motion.button>
+
+          <motion.button
+            type="button"
+            onClick={handleBookmark}
+            disabled={isBookmarking}
+            whileTap={{ scale: 0.9 }}
+            className={`inline-flex items-center gap-2 rounded-full border px-5 py-3 font-semibold transition ${
+              isBookmarked
+                ? "border-violet-200 bg-violet-50 text-violet-700"
+                : "border-neutral-200 bg-white text-neutral-700 hover:border-violet-200 hover:text-violet-700"
+            } disabled:cursor-not-allowed disabled:opacity-60`}
+            aria-label={
+              isBookmarked ? "Remove from saved stories" : "Save story"
+            }
+          >
+            <Bookmark size={19} fill={isBookmarked ? "currentColor" : "none"} />
+            <span>{isBookmarked ? "Saved" : "Save"}</span>
+          </motion.button>
+        </div>
         {blog.coverImage && (
           <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
@@ -677,9 +748,12 @@ function BlogDetails() {
                       return (
                         <>
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                            <p className="font-semibold text-neutral-900">
+                            <Link
+                              to={`/author/${commentAuthorId}`}
+                              className="font-semibold text-neutral-900 transition hover:text-violet-600"
+                            >
                               {comment.author?.name || "Anonymous"}
-                            </p>
+                            </Link>
 
                             <time
                               dateTime={comment.createdAt}

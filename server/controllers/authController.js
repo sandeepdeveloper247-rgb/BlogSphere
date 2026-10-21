@@ -29,10 +29,12 @@ const registerUser = async (req, res) => {
       token,
       user: {
         id: user._id,
+        _id: user._id,
         name: user.name,
         email: user.email,
         profileImage: user.profileImage,
         bio: user.bio,
+        savedBlogs: user.savedBlogs || [],
       },
     });
   } catch (error) {
@@ -70,10 +72,12 @@ const loginUser = async (req, res) => {
       token,
       user: {
         id: user._id,
+        _id: user._id,
         name: user.name,
         email: user.email,
         profileImage: user.profileImage,
         bio: user.bio,
+        savedBlogs: user.savedBlogs || [],
       },
     });
   } catch (error) {

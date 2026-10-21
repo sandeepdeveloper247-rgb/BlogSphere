@@ -16,7 +16,16 @@ const deleteLocalFile = (fileUrl) => {
 // Get the logged-in user's profile and published blogs
 const getMyProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("-password");
+    const user = await User.findById(req.userId)
+      .select("-password")
+      .populate({
+        path: "savedBlogs",
+        options: { sort: { createdAt: -1 } },
+        populate: {
+          path: "author",
+          select: "name profileImage",
+        },
+      });
 
     if (!user) {
       return res.status(404).json({
@@ -33,6 +42,7 @@ const getMyProfile = async (req, res) => {
     return res.status(200).json({
       user,
       blogs,
+      savedBlogs: user.savedBlogs || [],
     });
   } catch (error) {
     console.error("Get profile error:", error);
@@ -109,6 +119,7 @@ const updateMyProfile = async (req, res) => {
         email: user.email,
         profileImage: user.profileImage,
         bio: user.bio,
+        savedBlogs: user.savedBlogs || [],
       },
     });
   } catch (error) {
@@ -120,7 +131,46 @@ const updateMyProfile = async (req, res) => {
   }
 };
 
+const getPublicProfile = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const author = await User.findById(userId).select(
+      "name profileImage bio createdAt",
+    );
+
+    if (!author) {
+      return res.status(404).json({
+        message: "Author not found",
+      });
+    }
+
+    const blogs = await Blog.find({
+      author: author._id,
+    })
+      .populate("author", "name profileImage")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      author,
+      blogs,
+    });
+  } catch (error) {
+    if (error.name === "CastError") {
+      return res.status(400).json({
+        message: "Invalid author ID",
+      });
+    }
+
+    console.error("Get public profile error:", error);
+    return res.status(500).json({
+      message: "Failed to fetch author profile",
+    });
+  }
+};
+
 module.exports = {
   getMyProfile,
   updateMyProfile,
+  getPublicProfile,
 };

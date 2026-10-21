@@ -3,6 +3,7 @@ const path = require("path");
 const Blog = require("../models/Blog");
 const Comment = require("../models/Comment");
 const Notification = require("../models/Notification");
+const User = require("../models/User");
 
 const parseTags = (rawTags) => {
   if (!rawTags) return [];
@@ -284,6 +285,10 @@ const deleteBlog = async (req, res) => {
     }
     await Comment.deleteMany({ blog: blog._id });
     await Notification.deleteMany({ blog: blog._id });
+    await User.updateMany(
+      { savedBlogs: blog._id },
+      { $pull: { savedBlogs: blog._id } },
+    );
     await blog.deleteOne();
 
     return res.status(200).json({
@@ -304,11 +309,67 @@ const deleteBlog = async (req, res) => {
   }
 };
 
+const toggleBookmark = async (req, res) => {
+  try {
+    const blog = await Blog.findById(req.params.id);
+
+    if (!blog) {
+      return res.status(404).json({
+        message: "Blog not found",
+      });
+    }
+
+    const user = await User.findById(req.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    const blogIdStr = blog._id.toString();
+    const alreadySaved = user.savedBlogs.some(
+      (savedId) => savedId.toString() === blogIdStr
+    );
+
+    if (alreadySaved) {
+      user.savedBlogs = user.savedBlogs.filter(
+        (savedId) => savedId.toString() !== blogIdStr
+      );
+    } else {
+      user.savedBlogs.push(blog._id);
+    }
+
+    await user.save();
+
+    return res.status(200).json({
+      message: alreadySaved
+        ? "Removed from saved stories"
+        : "Saved to reading list",
+      isBookmarked: !alreadySaved,
+      savedBlogs: user.savedBlogs,
+    });
+  } catch (error) {
+    console.error("Toggle bookmark error:", error);
+
+    if (error.name === "CastError") {
+      return res.status(400).json({
+        message: "Invalid blog ID",
+      });
+    }
+
+    return res.status(500).json({
+      message: "Failed to update bookmark",
+    });
+  }
+};
+
 module.exports = {
   getAllBlogs,
   createBlog,
   getBlogById,
   toggleLike,
+  toggleBookmark,
   updateBlog,
   deleteBlog,
 };

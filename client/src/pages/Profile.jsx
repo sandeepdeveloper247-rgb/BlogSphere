@@ -13,6 +13,9 @@ import {
   FileText,
   Camera,
   Trash2,
+  Bookmark,
+  Clock,
+  Compass,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
@@ -26,6 +29,11 @@ const getImageUrl = (path) => {
   return `${BACKEND_URL}${path}`;
 };
 
+const getReadTime = (content = "") => {
+  const words = content.trim().split(/\s+/).filter(Boolean).length;
+  return `${Math.max(1, Math.ceil(words / 200))} min read`;
+};
+
 const Profile = () => {
   const { isAuthenticated, login } = useAuth();
   const navigate = useNavigate();
@@ -33,6 +41,8 @@ const Profile = () => {
 
   const [profileData, setProfileData] = useState(null);
   const [userBlogs, setUserBlogs] = useState([]);
+  const [savedBlogs, setSavedBlogs] = useState([]);
+  const [activeTab, setActiveTab] = useState("published"); // "published" | "saved"
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -59,6 +69,7 @@ const Profile = () => {
         const fetchedUser = response.data.user;
         setProfileData(fetchedUser);
         setUserBlogs(response.data.blogs || []);
+        setSavedBlogs(response.data.savedBlogs || []);
         setEditForm({
           name: fetchedUser.name || "",
           bio: fetchedUser.bio || "",
@@ -74,7 +85,6 @@ const Profile = () => {
     fetchProfileData();
   }, [isAuthenticated, navigate]);
 
-  // Clean up object URL on unmount
   useEffect(() => {
     return () => {
       if (imagePreview && imagePreview.startsWith("blob:")) {
@@ -85,7 +95,6 @@ const Profile = () => {
 
   const handleEditToggle = () => {
     if (isEditing && profileData) {
-      // Reset changes on cancel
       if (imagePreview && imagePreview.startsWith("blob:")) {
         URL.revokeObjectURL(imagePreview);
       }
@@ -171,7 +180,6 @@ const Profile = () => {
       setRemoveCurrentImage(false);
       setImagePreview(getImageUrl(updatedUser.profileImage));
 
-      // Update global auth context so Navbar reflects the new name & avatar immediately
       const currentToken = localStorage.getItem("token");
       if (currentToken) {
         login(updatedUser, currentToken);
@@ -208,6 +216,8 @@ const Profile = () => {
     );
   }
 
+  const displayedBlogs = activeTab === "published" ? userBlogs : savedBlogs;
+
   return (
     <motion.main
       initial={{ opacity: 0, y: 16 }}
@@ -222,7 +232,6 @@ const Profile = () => {
 
           <div className="px-6 pb-8 sm:px-10">
             <div className="relative -mt-12 mb-4 flex flex-wrap items-end justify-between gap-4 sm:-mt-16">
-              {/* Avatar Container */}
               <div className="relative">
                 <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-neutral-100 text-neutral-400 shadow-sm sm:h-32 sm:w-32">
                   {imagePreview ? (
@@ -236,7 +245,6 @@ const Profile = () => {
                   )}
                 </div>
 
-                {/* Hidden File Input */}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -245,7 +253,6 @@ const Profile = () => {
                   className="hidden"
                 />
 
-                {/* Camera Trigger Button in Edit Mode */}
                 {isEditing && (
                   <button
                     type="button"
@@ -279,7 +286,6 @@ const Profile = () => {
                   onSubmit={handleSaveProfile}
                   className="mt-6 max-w-xl space-y-5 overflow-hidden"
                 >
-                  {/* Photo Action Buttons */}
                   <div className="flex flex-wrap items-center gap-3">
                     <button
                       type="button"
@@ -394,41 +400,94 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* User's Blogs Section */}
-        <div className="mt-12">
-          <div className="mb-6 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-xl font-bold text-neutral-900">
-              <FileText size={20} className="text-neutral-400" />
-              Your Published Stories
-            </h2>
-            <span className="rounded-full bg-neutral-200 px-3 py-1 text-xs font-semibold text-neutral-700">
+        {/* Tabs for Published & Saved Stories */}
+        <div className="mt-10 flex flex-wrap items-center gap-3 border-b border-neutral-200 pb-4">
+          <button
+            type="button"
+            onClick={() => setActiveTab("published")}
+            className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition ${
+              activeTab === "published"
+                ? "bg-black text-white shadow-sm"
+                : "bg-white text-neutral-600 hover:bg-neutral-100 hover:text-black"
+            }`}
+          >
+            <FileText size={16} />
+            Published Stories
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs ${
+                activeTab === "published"
+                  ? "bg-white/20 text-white"
+                  : "bg-neutral-100 text-neutral-600"
+              }`}
+            >
               {userBlogs.length}
             </span>
-          </div>
+          </button>
 
-          {userBlogs.length === 0 ? (
+          <button
+            type="button"
+            onClick={() => setActiveTab("saved")}
+            className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition ${
+              activeTab === "saved"
+                ? "bg-black text-white shadow-sm"
+                : "bg-white text-neutral-600 hover:bg-neutral-100 hover:text-black"
+            }`}
+          >
+            <Bookmark size={16} />
+            Saved Stories
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs ${
+                activeTab === "saved"
+                  ? "bg-white/20 text-white"
+                  : "bg-neutral-100 text-neutral-600"
+              }`}
+            >
+              {savedBlogs.length}
+            </span>
+          </button>
+        </div>
+
+        {/* Stories Grid */}
+        <div className="mt-8">
+          {displayedBlogs.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-neutral-300 bg-white px-6 py-16 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-neutral-100">
-                <PenLine size={24} className="text-neutral-500" />
+                {activeTab === "published" ? (
+                  <PenLine size={24} className="text-neutral-500" />
+                ) : (
+                  <Bookmark size={24} className="text-neutral-500" />
+                )}
               </div>
               <h3 className="mt-5 text-xl font-semibold text-neutral-900">
-                You haven't published anything yet
+                {activeTab === "published"
+                  ? "You haven't published anything yet"
+                  : "No saved stories yet"}
               </h3>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-neutral-500">
-                Ready to share your ideas with the world? Start writing your
-                first blog post today.
+                {activeTab === "published"
+                  ? "Ready to share your ideas with the world? Start writing your first blog post today."
+                  : "Bookmark interesting stories while reading to build your personal reading list."}
               </p>
               <Link
-                to="/create"
+                to={activeTab === "published" ? "/create" : "/explore"}
                 className="mt-6 inline-flex items-center gap-2 rounded-full bg-black px-6 py-3 text-sm font-medium text-white transition hover:bg-neutral-800"
               >
-                <PenLine size={16} />
-                Write a Story
+                {activeTab === "published" ? (
+                  <>
+                    <PenLine size={16} />
+                    Write a Story
+                  </>
+                ) : (
+                  <>
+                    <Compass size={16} />
+                    Explore Stories
+                  </>
+                )}
               </Link>
             </div>
           ) : (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {userBlogs.map((blog, index) => (
+              {displayedBlogs.map((blog, index) => (
                 <motion.article
                   key={blog._id}
                   initial={{ opacity: 0, y: 20 }}
@@ -455,18 +514,30 @@ const Profile = () => {
                       <h3 className="line-clamp-2 text-lg font-semibold text-neutral-900">
                         {blog.title}
                       </h3>
-                      <div className="mt-4 flex items-center gap-2 text-xs text-neutral-500">
-                        <CalendarDays size={14} />
-                        <time dateTime={blog.createdAt}>
-                          {new Date(blog.createdAt).toLocaleDateString(
-                            "en-IN",
-                            {
-                              day: "numeric",
-                              month: "long",
-                              year: "numeric",
-                            },
-                          )}
-                        </time>
+
+                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-neutral-500">
+                        {blog.content}
+                      </p>
+
+                      <div className="mt-4 flex items-center justify-between text-xs text-neutral-400">
+                        <div className="flex items-center gap-1.5">
+                          <CalendarDays size={14} />
+                          <time dateTime={blog.createdAt}>
+                            {new Date(blog.createdAt).toLocaleDateString(
+                              "en-IN",
+                              {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              },
+                            )}
+                          </time>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <Clock size={13} />
+                          <span>{getReadTime(blog.content)}</span>
+                        </div>
                       </div>
                     </div>
                   </Link>

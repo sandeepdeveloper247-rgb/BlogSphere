@@ -8,6 +8,7 @@ import CreateBlog from "./pages/CreateBlog";
 import BlogDetails from "./pages/BlogDetails";
 import Explore from "./pages/Explore";
 import Profile from "./pages/Profile";
+import AuthorProfile from "./pages/AuthorProfile";
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
         <Route path="/create" element={<CreateBlog />} />
         <Route path="/blogs/:id/edit" element={<CreateBlog />} />
         <Route path="/blogs/:id" element={<BlogDetails />} />
+        <Route path="/author/:id" element={<AuthorProfile />} />
       </Routes>
     </BrowserRouter>
   );

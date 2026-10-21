@@ -1,5 +1,5 @@
 const express=require("express");
-const {getAllBlogs,createBlog,getBlogById,toggleLike,updateBlog,deleteBlog,}=require("../controllers/blogController");
+const {getAllBlogs,createBlog,getBlogById,toggleLike,updateBlog,deleteBlog,toggleBookmark}=require("../controllers/blogController");
 
 const protect=require("../middleware/authMiddleware");
 const upload=require("../middleware/uploadMiddleware");
@@ -12,4 +12,5 @@ router.post("/",protect,upload.single("coverImage"),createBlog);
 router.put("/:id", protect, upload.single("coverImage"), updateBlog);
 router.delete("/:id", protect, deleteBlog);
 router.post("/:id/like", protect, toggleLike);
+router.post("/:id/bookmark", protect, toggleBookmark);
 module.exports=router;

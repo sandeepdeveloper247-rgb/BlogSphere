@@ -10,7 +10,10 @@ import {
   Tag,
 } from "lucide-react";
 import api from "../services/api";
-
+const getReadTime = (content = "") => {
+  const words = content.trim().split(/\s+/).filter(Boolean).length;
+  return `${Math.max(1, Math.ceil(words / 200))} min read`;
+};
 const Explore = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTag = searchParams.get("tag") || "All";
@@ -406,6 +409,8 @@ const Explore = () => {
                           {blog.createdAt
                             ? new Date(blog.createdAt).toLocaleDateString()
                             : ""}
+                          {" · "}
+                          {getReadTime(blog.content)}
                         </p>
                       </div>
                     </div>
