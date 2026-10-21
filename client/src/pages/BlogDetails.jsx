@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Heart } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { MessageCircle, Send } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, useScroll, useSpring } from "framer-motion";
 import socket from "../services/socket";
 import MarkdownRenderer from "../components/MarkdownRenderer";
 import {
@@ -18,6 +18,7 @@ import {
   X,
   Bookmark,
   Clock,
+  Share2,
 } from "lucide-react";
 import api from "../services/api";
 
@@ -40,6 +41,14 @@ function BlogDetails() {
   const [isLiking, setIsLiking] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isBookmarking, setIsBookmarking] = useState(false);
+
+  const [copied, setCopied] = useState(false);
+  const { scrollYProgress } = useScroll();
+  const scaleX = useSpring(scrollYProgress, {
+    stiffness: 100,
+    damping: 30,
+    restDelta: 0.001,
+  });
 
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -219,7 +228,17 @@ function BlogDetails() {
       setIsBookmarking(false);
     }
   };
+  const handleShare = async () => {
+    const shareUrl = window.location.href;
 
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    } catch (err) {
+      console.error("Failed to copy link:", err);
+    }
+  };
   const handleCommentSubmit = async (event) => {
     event.preventDefault();
 
@@ -419,6 +438,10 @@ function BlogDetails() {
       transition={{ duration: 0.45 }}
       className="min-h-screen bg-neutral-50 px-4 py-8 sm:px-6 sm:py-12"
     >
+      <motion.div
+        style={{ scaleX }}
+        className="fixed left-0 right-0 top-0 z-[60] h-1 origin-left bg-gradient-to-r from-violet-600 via-fuchsia-500 to-violet-600"
+      />
       <article className="mx-auto max-w-4xl">
         <Link
           to="/"
@@ -575,6 +598,29 @@ function BlogDetails() {
             <Bookmark size={19} fill={isBookmarked ? "currentColor" : "none"} />
             <span>{isBookmarked ? "Saved" : "Save"}</span>
           </motion.button>
+          <motion.button
+            type="button"
+            onClick={handleShare}
+            whileTap={{ scale: 0.9 }}
+            className={`inline-flex items-center gap-2 rounded-full border px-5 py-3 font-semibold transition ${
+              copied
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50 hover:text-black"
+            }`}
+            aria-label="Copy link to share this blog"
+          >
+            {copied ? (
+              <>
+                <Check size={19} className="text-emerald-600" />
+                <span>Link copied!</span>
+              </>
+            ) : (
+              <>
+                <Share2 size={19} />
+                <span>Share</span>
+              </>
+            )}
+          </motion.button>
         </div>
         {blog.coverImage && (
           <motion.div
@@ -608,7 +654,7 @@ function BlogDetails() {
           {/* <div className="whitespace-pre-wrap break-words text-base leading-8 text-neutral-700 sm:text-lg sm:leading-9">
             {blog.content}
           </div> */}
-          <MarkdownRenderer content={blog.content}/>
+          <MarkdownRenderer content={blog.content} />
         </motion.div>
 
         {/* Comments Section */}
