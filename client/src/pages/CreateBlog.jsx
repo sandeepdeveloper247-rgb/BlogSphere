@@ -11,9 +11,20 @@ import {
   CheckCircle2,
   Tag,
   Plus,
+  Eye,
+  PenLine,
+  Bold,
+  Italic,
+  Heading2,
+  Code,
+  FileCode,
+  Quote,
+  List,
+  Link as LinkIcon,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
+import MarkdownRenderer from "../components/MarkdownRenderer";
 
 const MAX_TITLE_LENGTH = 150;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -38,9 +49,11 @@ const CreateBlog = () => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
+  const textareaRef = useRef(null);
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [editorTab, setEditorTab] = useState("write");
   const [tags, setTags] = useState([]);
   const [tagInput, setTagInput] = useState("");
   const [coverImage, setCoverImage] = useState(null);
@@ -107,6 +120,33 @@ const CreateBlog = () => {
       cancelled = true;
     };
   }, [id, isEditMode, navigate]);
+
+  const insertMarkdown = (prefix, suffix = "", placeholder = "text") => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = content.substring(start, end);
+    const replacement = selectedText || placeholder;
+
+    const newText =
+      content.substring(0, start) +
+      prefix +
+      replacement +
+      suffix +
+      content.substring(end);
+
+    setContent(newText);
+    setEditorTab("write");
+
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const newCursorStart = start + prefix.length;
+      const newCursorEnd = newCursorStart + replacement.length;
+      textarea.setSelectionRange(newCursorStart, newCursorEnd);
+    });
+  };
 
   const addTag = (rawValue) => {
     const cleaned = rawValue.trim().replace(/^#/, "");
@@ -293,7 +333,7 @@ const CreateBlog = () => {
           <p className="mt-4 max-w-xl leading-7 text-neutral-500">
             {isEditMode
               ? "Make changes to your story and keep it up to date."
-              : "Put your thoughts into words, add a cover image, and share your perspective with the BlogSphere community."}
+              : "Put your thoughts into words, format with Markdown, and share your perspective with the BlogSphere community."}
           </p>
         </motion.div>
 
@@ -403,7 +443,6 @@ const CreateBlog = () => {
               )}
             </div>
 
-            {/* Quick-Select Suggested Tags */}
             {tags.length < MAX_TAGS && (
               <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                 <span className="mr-1 text-xs text-neutral-400">
@@ -491,33 +530,165 @@ const CreateBlog = () => {
             )}
           </div>
 
-          {/* Content */}
+          {/* Content with Markdown Toolbar & Write / Preview Tabs */}
           <div>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <label
                 htmlFor="blog-content"
                 className="text-sm font-semibold text-neutral-800"
               >
-                Your story
+                Your story{" "}
+                <span className="font-normal text-neutral-400">
+                  (Markdown supported)
+                </span>
               </label>
 
-              <span className="text-xs text-neutral-400">
-                {content.trim().length} characters
-              </span>
+              <div className="inline-flex rounded-xl border border-neutral-200 bg-neutral-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => setEditorTab("write")}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                    editorTab === "write"
+                      ? "bg-white text-neutral-900 shadow-sm"
+                      : "text-neutral-500 hover:text-neutral-900"
+                  }`}
+                >
+                  <PenLine size={14} />
+                  Write
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setEditorTab("preview")}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                    editorTab === "preview"
+                      ? "bg-white text-neutral-900 shadow-sm"
+                      : "text-neutral-500 hover:text-neutral-900"
+                  }`}
+                >
+                  <Eye size={14} />
+                  Live Preview
+                </button>
+              </div>
             </div>
 
-            <textarea
-              id="blog-content"
-              value={content}
-              onChange={(event) => setContent(event.target.value)}
-              placeholder="Start writing your story here..."
-              rows={12}
-              className="mt-3 w-full resize-y rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-4 leading-7 outline-none transition placeholder:text-neutral-400 focus:border-neutral-500 focus:bg-white focus:ring-4 focus:ring-neutral-100"
-              required
-            />
+            {editorTab === "write" && (
+              <div className="mt-3 flex flex-wrap items-center gap-1 rounded-t-xl border border-b-0 border-neutral-200 bg-neutral-100/80 px-2.5 py-2">
+                <button
+                  type="button"
+                  onClick={() => insertMarkdown("## ", "", "Heading")}
+                  title="Heading"
+                  className="rounded-lg p-1.5 text-neutral-600 transition hover:bg-white hover:text-black"
+                >
+                  <Heading2 size={16} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => insertMarkdown("**", "**", "bold text")}
+                  title="Bold"
+                  className="rounded-lg p-1.5 text-neutral-600 transition hover:bg-white hover:text-black"
+                >
+                  <Bold size={16} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => insertMarkdown("*", "*", "italic text")}
+                  title="Italic"
+                  className="rounded-lg p-1.5 text-neutral-600 transition hover:bg-white hover:text-black"
+                >
+                  <Italic size={16} />
+                </button>
+
+                <span className="mx-1 h-4 w-px bg-neutral-300" />
+
+                <button
+                  type="button"
+                  onClick={() => insertMarkdown("`", "`", "code")}
+                  title="Inline Code"
+                  className="rounded-lg p-1.5 text-neutral-600 transition hover:bg-white hover:text-black"
+                >
+                  <Code size={16} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    insertMarkdown(
+                      "\n```javascript\n",
+                      "\n```\n",
+                      "// code here",
+                    )
+                  }
+                  title="Code Block"
+                  className="rounded-lg p-1.5 text-neutral-600 transition hover:bg-white hover:text-black"
+                >
+                  <FileCode size={16} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => insertMarkdown("\n> ", "", "Quote")}
+                  title="Quote"
+                  className="rounded-lg p-1.5 text-neutral-600 transition hover:bg-white hover:text-black"
+                >
+                  <Quote size={16} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => insertMarkdown("\n- ", "", "List item")}
+                  title="Bullet List"
+                  className="rounded-lg p-1.5 text-neutral-600 transition hover:bg-white hover:text-black"
+                >
+                  <List size={16} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    insertMarkdown("[", "](https://example.com)", "link text")
+                  }
+                  title="Link"
+                  className="rounded-lg p-1.5 text-neutral-600 transition hover:bg-white hover:text-black"
+                >
+                  <LinkIcon size={16} />
+                </button>
+
+                <span className="ml-auto text-xs text-neutral-400">
+                  {content.trim().length} characters
+                </span>
+              </div>
+            )}
+
+            {editorTab === "write" ? (
+              <textarea
+                ref={textareaRef}
+                id="blog-content"
+                value={content}
+                onChange={(event) => setContent(event.target.value)}
+                placeholder="Write your story using Markdown (# Headings, **bold**, ```code blocks```, > quotes)..."
+                rows={13}
+                className="w-full resize-y rounded-b-xl border border-neutral-200 bg-neutral-50 px-4 py-4 font-mono text-sm leading-7 outline-none transition placeholder:font-sans placeholder:text-neutral-400 focus:border-neutral-500 focus:bg-white focus:ring-4 focus:ring-neutral-100"
+                required
+              />
+            ) : (
+              <div className="mt-3 min-h-[340px] rounded-xl border border-neutral-200 bg-white p-6">
+                <MarkdownRenderer content={content} />
+              </div>
+            )}
 
             <p className="mt-2 text-xs text-neutral-400">
-              Write clearly and share something worth reading.
+              Tip: Use Markdown shortcuts like{" "}
+              <code className="rounded bg-neutral-100 px-1 py-0.5">##</code> for
+              headings,{" "}
+              <code className="rounded bg-neutral-100 px-1 py-0.5">
+                **bold**
+              </code>
+              , or{" "}
+              <code className="rounded bg-neutral-100 px-1 py-0.5">```</code>{" "}
+              for code blocks. Switch to <strong>Live Preview</strong> anytime.
             </p>
           </div>
 
@@ -572,17 +743,17 @@ const CreateBlog = () => {
             >
               {loading ? (
                 <>
-                  <LoaderCircle size={18} className="animate-spin" />
+                  <LoaderCircle className="animate-spin" size={18} />
                   {isEditMode ? "Saving..." : "Publishing..."}
                 </>
               ) : success ? (
                 <>
-                  <CheckCircle2 size={18} />
+                  <CheckCircle2 size={18}/>
                   Published
                 </>
               ) : (
                 <>
-                  <Send size={17} />
+                  <Send size={17}/>
                   {isEditMode ? "Save changes" : "Publish story"}
                 </>
               )}

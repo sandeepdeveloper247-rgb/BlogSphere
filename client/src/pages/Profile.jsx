@@ -33,7 +33,14 @@ const getReadTime = (content = "") => {
   const words = content.trim().split(/\s+/).filter(Boolean).length;
   return `${Math.max(1, Math.ceil(words / 200))} min read`;
 };
-
+const stripMarkdown = (text = "") =>
+  text
+    .replace(/```[\s\S]*?```/g, "[Code] ") // Replaces big code blocks with "[Code]"
+    .replace(/!\[.*?\]\(.*?\)/g, "") // Removes markdown image links
+    .replace(/\[(.*?)\]\(.*?\)/g, "$1") // Turns [link text](url) into "link text"
+    .replace(/[#>*_`~-]/g, "") // Removes #, >, *, _, `, ~, - symbols
+    .replace(/\s+/g, " ") // Collapses extra spaces/newlines
+    .trim();
 const Profile = () => {
   const { isAuthenticated, login } = useAuth();
   const navigate = useNavigate();
@@ -515,8 +522,8 @@ const Profile = () => {
                         {blog.title}
                       </h3>
 
-                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-neutral-500">
-                        {blog.content}
+                      <p className="mt-3 line-clamp-2 text-sm leading-6 text-neutral-500">
+                        {stripMarkdown(blog.content)}
                       </p>
 
                       <div className="mt-4 flex items-center justify-between text-xs text-neutral-400">

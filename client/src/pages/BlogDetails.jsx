@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { MessageCircle, Send } from "lucide-react";
 import { motion } from "framer-motion";
 import socket from "../services/socket";
+import MarkdownRenderer from "../components/MarkdownRenderer";
 import {
   ArrowLeft,
   CalendarDays,
@@ -604,9 +605,10 @@ function BlogDetails() {
             The Story
           </div>
 
-          <div className="whitespace-pre-wrap break-words text-base leading-8 text-neutral-700 sm:text-lg sm:leading-9">
+          {/* <div className="whitespace-pre-wrap break-words text-base leading-8 text-neutral-700 sm:text-lg sm:leading-9">
             {blog.content}
-          </div>
+          </div> */}
+          <MarkdownRenderer content={blog.content}/>
         </motion.div>
 
         {/* Comments Section */}
