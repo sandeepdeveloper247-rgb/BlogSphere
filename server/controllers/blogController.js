@@ -93,11 +93,12 @@ const createBlog = async (req, res) => {
   }
 };
 
+// Get a single blog by ID + up to 3 Related Stories
 const getBlogById = async (req, res) => {
   try {
     const blog = await Blog.findById(req.params.id).populate(
       "author",
-      "name profileImage bio",
+      "name email profileImage bio",
     );
 
     if (!blog) {
@@ -106,17 +107,74 @@ const getBlogById = async (req, res) => {
       });
     }
 
-    res.status(200).json({ blog });
+    const blogTags = Array.isArray(blog.tags) ? blog.tags : [];
+    const authorId = blog.author?._id || blog.author;
+
+    // 1. Find candidates sharing tags or written by the same author
+    const matchConditions = [{ author: authorId }];
+    if (blogTags.length > 0) {
+      matchConditions.push({ tags: { $in: blogTags } });
+    }
+
+    const candidates = await Blog.find({
+      _id: { $ne: blog._id },
+      $or: matchConditions,
+    })
+      .populate("author", "name profileImage")
+      .sort({ createdAt: -1 })
+      .limit(10);
+
+    // 2. Score candidates: +2 points per shared tag, +1 point if same author
+    const tagSet = new Set(blogTags.map((t) => t.toLowerCase()));
+    const scoredCandidates = candidates
+      .map((candidate) => {
+        const candidateTags = Array.isArray(candidate.tags)
+          ? candidate.tags
+          : [];
+        const sharedTagCount = candidateTags.filter((t) =>
+          tagSet.has(t.toLowerCase()),
+        ).length;
+
+        const isSameAuthor =
+          (candidate.author?._id || candidate.author)?.toString() ===
+          authorId?.toString();
+
+        const score = sharedTagCount * 2 + (isSameAuthor ? 1 : 0);
+        return { blog: candidate, score };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    const relatedBlogs = scoredCandidates.slice(0, 3).map((item) => item.blog);
+
+    // 3. Fallback: Fill remaining slots (up to 3) with recent community blogs
+    if (relatedBlogs.length < 3) {
+      const excludedIds = [blog._id, ...relatedBlogs.map((item) => item._id)];
+
+      const fallbackBlogs = await Blog.find({
+        _id: { $nin: excludedIds },
+      })
+        .populate("author", "name profileImage")
+        .sort({ createdAt: -1 })
+        .limit(3 - relatedBlogs.length);
+
+      relatedBlogs.push(...fallbackBlogs);
+    }
+
+    return res.status(200).json({
+      blog,
+      relatedBlogs,
+    });
   } catch (error) {
+    console.error("Get blog by ID error:", error);
+
     if (error.name === "CastError") {
       return res.status(400).json({
         message: "Invalid blog ID",
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       message: "Failed to fetch blog",
-      error: error.message,
     });
   }
 };
@@ -329,12 +387,12 @@ const toggleBookmark = async (req, res) => {
 
     const blogIdStr = blog._id.toString();
     const alreadySaved = user.savedBlogs.some(
-      (savedId) => savedId.toString() === blogIdStr
+      (savedId) => savedId.toString() === blogIdStr,
     );
 
     if (alreadySaved) {
       user.savedBlogs = user.savedBlogs.filter(
-        (savedId) => savedId.toString() !== blogIdStr
+        (savedId) => savedId.toString() !== blogIdStr,
       );
     } else {
       user.savedBlogs.push(blog._id);

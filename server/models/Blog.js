@@ -35,6 +35,7 @@ const blogSchema = new mongoose.Schema(
     timestamps: true,
   },
 );
-
+blogSchema.index({ tags: 1, createdAt: -1 });
+blogSchema.index({ author: 1, createdAt: -1 });
 const Blog = mongoose.model("Blog", blogSchema);
 module.exports = Blog;

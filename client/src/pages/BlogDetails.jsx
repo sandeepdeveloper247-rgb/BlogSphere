@@ -19,6 +19,8 @@ import {
   Bookmark,
   Clock,
   Share2,
+  Sparkles,
+  PenLine,
 } from "lucide-react";
 import api from "../services/api";
 
@@ -27,10 +29,19 @@ const getReadTime = (content = "") => {
   const words = content.trim().split(/\s+/).filter(Boolean).length;
   return `${Math.max(1, Math.ceil(words / 200))} min read`;
 };
+const stripMarkdown = (text = "") =>
+  text
+    .replace(/```[\s\S]*?```/g, "[Code] ")
+    .replace(/!\[.*?\]\(.*?\)/g, "")
+    .replace(/\[(.*?)\]\(.*?\)/g, "$1")
+    .replace(/[#>*_`~-]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 function BlogDetails() {
   const { id } = useParams();
 
   const [blog, setBlog] = useState(null);
+  const [relatedBlogs, setRelatedBlogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { user, isAuthenticated, login } = useAuth();
@@ -76,7 +87,9 @@ function BlogDetails() {
         const response = await api.get(`/blogs/${id}`);
         setBlog(response.data.blog);
         const fetchedBlog = response.data.blog;
-
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        setBlog(fetchedBlog);
+        setRelatedBlogs(response.data.relatedBlogs || []);
         setLikesCount(fetchedBlog.likes?.length || 0);
 
         const currentUserId = user?._id || user?.id;
@@ -1037,6 +1050,101 @@ function BlogDetails() {
               </div>
             </motion.div>
           </div>
+        )}
+        {/* Related Stories / More to Read Section */}
+        {relatedBlogs.length > 0 && (
+          <section className="mt-12">
+            <div className="mb-6 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
+                  <Sparkles size={18} />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-neutral-900">
+                    Related Stories
+                  </h2>
+                  <p className="text-xs text-neutral-500">
+                    More perspectives based on this topic and author
+                  </p>
+                </div>
+              </div>
+
+              <Link
+                to="/explore"
+                className="text-sm font-medium text-violet-600 transition hover:text-violet-800"
+              >
+                Explore all →
+              </Link>
+            </div>
+
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {relatedBlogs.map((item, index) => (
+                <motion.article
+                  key={item._id}
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35, delay: index * 0.06 }}
+                  whileHover={{ y: -5 }}
+                  className="overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-sm transition-shadow hover:shadow-xl"
+                >
+                  <Link to={`/blogs/${item._id}`} className="block">
+                    <div className="h-44 bg-neutral-100">
+                      {item.coverImage ? (
+                        <img
+                          src={
+                            item.coverImage.startsWith("http")
+                              ? item.coverImage
+                              : `${BACKEND_URL}${item.coverImage}`
+                          }
+                          alt={item.title}
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-neutral-300">
+                          <PenLine size={28} />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-5">
+                      {Array.isArray(item.tags) && item.tags.length > 0 && (
+                        <div className="mb-2.5 flex flex-wrap gap-1.5">
+                          {item.tags.slice(0, 2).map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full bg-violet-50 px-2.5 py-0.5 text-[11px] font-semibold text-violet-700"
+                            >
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <h3 className="line-clamp-2 text-lg font-bold text-neutral-900">
+                        {item.title}
+                      </h3>
+
+                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-neutral-500">
+                        {stripMarkdown(item.content)}
+                      </p>
+
+                      <div className="mt-5 flex items-center justify-between border-t border-neutral-100 pt-3.5 text-xs text-neutral-400">
+                        <span className="truncate font-medium text-neutral-700">
+                          {item.author?.name || "Anonymous"}
+                        </span>
+
+                        <span className="inline-flex shrink-0 items-center gap-1">
+                          <Clock size={12} />
+                          {getReadTime(item.content)}
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                </motion.article>
+              ))}
+            </div>
+          </section>
         )}
       </article>
     </motion.main>
